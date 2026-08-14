@@ -378,3 +378,302 @@ post-increment ldr r3,[r0],#4, objdump для проверки.
 Банки регистров изолируют РЕЖИМЫ; между анклавами SP_usr
 виртуализует планировщик (struct enclave_ctx).
 ```
+# Конспект: ассемблер + линкер. День 3
+
+## 1. Что делает ассемблер
+
+Ассемблер превращает код и директивы в объектный файл `.o`.
+
+Он создаёт:
+
+```text
+секции + метки + данные + релокации
+```
+
+---
+
+## 2. Секции
+
+```asm
+.section .text
+```
+
+код.
+
+```asm
+.section .rodata
+```
+
+константы.
+
+```asm
+.section .data
+```
+
+инициализированные данные.
+
+```asm
+.section .bss
+```
+
+неинициализированные данные.
+
+`.bss` не занимает место в файле, но занимает место в памяти.
+
+---
+
+## 3. Метка
+
+```asm
+label:
+```
+
+означает:
+
+```text
+label = текущий адрес
+```
+
+Это не переменная, а символ-адрес.
+
+Получить адрес:
+
+```asm
+ldr r0, =label
+```
+
+Прочитать память по адресу:
+
+```asm
+ldr r0, [r1]
+```
+
+---
+
+## 4. Резервирование памяти
+
+```asm
+.byte   1        // 1 байт
+.hword  0x1234   // 2 байта
+.word   0x11223344 // 4 байта
+.skip   4096     // пропустить 4096 байт
+```
+
+---
+
+## 5. Выравнивание
+
+```asm
+.align 3
+```
+
+выравнивание на:
+
+```text
+2^3 = 8 байт
+```
+
+Явный вариант:
+
+```asm
+.balign 8
+```
+
+---
+
+## 6. Пример стека
+
+```asm
+.section .bss
+.align 3
+irq_stack:
+    .skip 4096
+__irq_stack_top:
+```
+
+Память:
+
+```text
+irq_stack       -> начало
+                4096 байт
+__irq_stack_top -> конец
+```
+
+Стек растёт вниз, поэтому SP ставят на конец:
+
+```asm
+ldr sp, =__irq_stack_top
+```
+
+---
+
+## 7. Что делает линкер
+
+Линкер собирает `.o`-файлы и назначает адреса.
+
+```text
+boot.o + main.o + linker.ld -> kernel.elf
+```
+
+Линкер решает:
+
+```text
+где .text
+где .data
+где .bss
+где __bss_start
+где __bss_end
+где _start
+```
+
+---
+
+## 8. Минимальный linker script
+
+```ld
+ENTRY(_start)
+
+SECTIONS
+{
+    . = 0x8000;
+
+    .text : {
+        KEEP(*(.text.boot))
+        *(.text*)
+    }
+
+    . = ALIGN(8);
+
+    .rodata : {
+        *(.rodata*)
+    }
+
+    . = ALIGN(8);
+
+    .data : {
+        *(.data*)
+    }
+
+    . = ALIGN(8);
+
+    .bss (NOLOAD) : {
+        __bss_start = .;
+        *(.bss*)
+        *(COMMON)
+        __bss_end = .;
+    }
+}
+```
+
+---
+
+## 9. Важные строки линкера
+
+```ld
+. = 0x8000;
+```
+
+текущий адрес.
+
+```ld
+ENTRY(_start)
+```
+
+точка входа.
+
+```ld
+KEEP(*(.text.boot))
+```
+
+не выбрасывать boot-код.
+
+```ld
+__bss_start = .;
+__bss_end = .;
+```
+
+создать символы начала и конца BSS.
+
+```ld
+.bss (NOLOAD)
+```
+
+BSS не хранить в файле.
+
+---
+
+## 10. Главное отличие
+
+Ассемблер:
+
+```text
+создаёт секции и метки
+```
+
+Линкер:
+
+```text
+назначает им адреса
+```
+
+---
+
+# Полезные команды
+
+## Собрать ассемблер
+```sh
+arm-none-eabi-as -mcpu=arm1176jzf-s boot.S -o boot.o
+```
+## Слинковать
+
+```sh
+arm-none-eabi-ld -T linker.ld -nostdlib boot.o main.o -o kernel.elf
+```
+## Слинковать с map-файлом
+```sh
+arm-none-eabi-ld -T linker.ld -Map kernel.map -nostdlib boot.o main.o -o kernel.img.elf
+```
+## Сделать бинарник
+```sh
+arm-none-eabi-objcopy -O binary kernel.elf kernel.img
+```
+## Посмотреть символы
+```sh
+arm-none-eabi-nm kernel.elf
+```
+## Найти конкретные символы
+```sh
+arm-none-eabi-nm kernel.elf | grep _start
+arm-none-eabi-nm kernel.elf | grep bss
+arm-none-eabi-nm kernel.elf | grep stack
+```
+## Посмотреть секции
+```sh
+arm-none-eabi-objdump -h kernel.elf
+```
+## Посмотреть код
+```sh
+arm-none-eabi-objdump -d kernel.elf
+```
+## Посмотреть всё
+```sh
+arm-none-eabi-objdump -x kernel.elf
+```
+## Посмотреть ELF-секции
+```sh
+arm-none-eabi-readelf -S kernel.elf
+```
+## Посмотреть символы в ELF
+```sh
+arm-none-eabi-readelf -s kernel.elf
+```
+---
+# Самая короткая суть
+
+```text
+Ассемблер: секции, метки, данные.
+Линкер: адреса, раскладка, символы.
+.bss: память есть, в файле нет, надо обнулить.
+.stack: SP = top, потому что стек растёт вниз.
+kernel.img: первая инструкция должна быть по адресу 0x8000.
+```
