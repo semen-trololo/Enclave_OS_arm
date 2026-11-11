@@ -32,6 +32,7 @@ extern char __svc_stack_top[];
 
 static unsigned int checks_ok;
 static unsigned int checks_fail;
+static unsigned int checks_skip;
 
 static void putreg(int n, unsigned int value)
 {
@@ -107,6 +108,17 @@ static void check(int ok, const char *what)
         checks_ok++;
     else
         checks_fail++;
+}
+
+/* Проверка, которую в этой среде проверить нельзя. В отличие от FAIL она не
+   портит вердикт: отсутствие тегов прошивки в QEMU — свойство эмулятора, а не
+   поломка ядра. На плате те же строки станут PASS или FAIL. */
+static void skip(const char *what)
+{
+    uart_puts("[SKIP] ");
+    uart_puts(what);
+    uart_putc('\n');
+    checks_skip++;
 }
 
 /* Чтение по фиксированному физическому адресу. Адрес спрятан от свёртки в
@@ -266,31 +278,217 @@ static int probe_regs_preserved(void)
     return exc_caught == EXC_SVC && v == 0xA5A5F00Du;
 }
 
-/* ATAG-список устроен так: по самому адресу лежит СЛОВО РАЗМЕРА тега, а его
-   номер — следующим словом (ATAG_CORE = 0x54410001, размер 5). На плате
-   firmware обязан оставить список на 0x100; QEMU raspi1ap его не пишет
-   вообще — замер 11.11.2026, поэтому отсутствие тегов здесь признак
-   эмулятора, а не поломки. Печатается, чтобы на плате сравнить одной
-   строкой больше и не искать потом, чем отличается запуск. */
+/* ========================== ATAG-список (M2) ==========================
+   Прошивка GPU оставляет ядру «записку» в оперативной памяти: сколько всего
+   памяти, какая ревизия платы, что за командная строка. Адрес записки прошивка
+   передаёт в r2, на Pi это 0x100. Каждый тег:
+
+        +0   size — размер тега в СЛОВАХ, включая эти два поля
+        +4   tag  — номер тега
+        +8   …    — данные
+
+   Список заканчивается тегом с size == 0 (ATAG_NONE). По самому адресу лежит
+   именно size, а номер — следующим словом.
+
+   Парсер обязан выдержать мусор: порванный список не должен увести ядро в
+   бесконечный цикл или в чтение по дикому адресу — на плате это висящая плата
+   без единого символа в UART, то есть несъёмная SD-карта ради диагностики. */
+
+#define ATAG_NONE     0x00000000u
+#define ATAG_CORE     0x54410001u
+#define ATAG_MEM      0x54410002u
+#define ATAG_SERIAL   0x54410006u
+#define ATAG_REVISION 0x54410007u
+#define ATAG_CMDLINE  0x54410009u
+
+/* Границы с запасом на порядок: реальный список прошивки — десятки слов. */
+#define ATAG_MAX_WORDS 1024u          /* 4 КБ на весь список */
+#define ATAG_MAX_TAGS  64u
+#define ATAG_MIN_WORDS 2u             /* меньше заголовка тег не занимает */
+
+/* Коды отказа — печатаются числом, чтобы на плате не пришлось гадать. */
+#define ATAG_OK        0u
+#define ATAG_BAD_ALIGN 1u
+#define ATAG_BAD_SIZE  2u
+#define ATAG_TOO_BIG   3u
+#define ATAG_NO_END    4u
+
+struct atag_walk {
+    unsigned int tags;    /* сколько тегов обошли */
+    unsigned int ram;     /* сумма ATAG_MEM, байт */
+    unsigned int bad;     /* ATAG_OK = список честный и дошёл до ATAG_NONE */
+};
+
+static struct atag_walk atag_walk_list(unsigned int addr, int verbose)
+{
+    struct atag_walk res;
+    unsigned int base = addr;
+    unsigned int used = 0;
+    int done = 0;
+
+    res.tags = 0;
+    res.ram = 0;
+    res.bad = ((base & 3u) != 0u) ? ATAG_BAD_ALIGN : ATAG_OK;
+
+    while (res.bad == ATAG_OK && res.tags < ATAG_MAX_TAGS &&
+           used + ATAG_MIN_WORDS <= ATAG_MAX_WORDS) {
+        unsigned int size = peek32(base);
+        unsigned int tag = peek32(base + 4u);
+
+        if (size == 0u) {           /* ATAG_NONE — конец списка */
+            done = 1;
+            break;
+        }
+        if (size < ATAG_MIN_WORDS) {
+            res.bad = ATAG_BAD_SIZE;
+            break;
+        }
+        if (size > ATAG_MAX_WORDS - used) {
+            res.bad = ATAG_TOO_BIG;    /* тег вылезает за границу списка */
+            break;
+        }
+
+        if (tag == ATAG_MEM)
+            res.ram += peek32(base + 8u);   /* у ATAG_MEM размер идёт первым */
+
+        if (verbose) {
+            uart_puts("  tag 0x");
+            uart_puthex(tag);
+            uart_puts(", ");
+            putdec(size);
+            uart_puts(" words");
+            if (tag == ATAG_MEM) {
+                uart_puts(": ");
+                putdec(peek32(base + 8u) / (1024u * 1024u));
+                uart_puts(" MB @ 0x");
+                uart_puthex(peek32(base + 12u));
+            } else if (tag == ATAG_CMDLINE) {
+                uart_puts(": ");
+                for (unsigned int i = 0; i < (size - ATAG_MIN_WORDS) * 4u; i++) {
+                    char c = (char)((peek32(base + 8u + (i & ~3u)) >>
+                                     (8u * (i & 3u))) & 0xFFu);
+                    if (c == '\0')
+                        break;
+                    uart_putc(c);
+                }
+            }
+            uart_putc('\n');
+        }
+
+        base += size * 4u;
+        used += size;
+        res.tags++;
+    }
+
+    if (res.bad == ATAG_OK && !done)
+        res.bad = ATAG_NO_END;      /* упёрлись в лимит, ATAG_NONE не встретили */
+
+    return res;
+}
+
+/* Похоже ли на начало списка: выровнено, ненулевое, первым идёт ATAG_CORE,
+   размер заголовка правдоподобен. Это единственное, чему можно доверять в
+   адресе, который нам принёс r2. */
+static int atag_head_ok(unsigned int addr)
+{
+    unsigned int size;
+    unsigned int tag;
+
+    if (addr == 0u || (addr & 3u) != 0u)
+        return 0;
+
+    size = peek32(addr);
+    tag = peek32(addr + 4u);
+    return size >= ATAG_MIN_WORDS && size <= ATAG_MAX_WORDS && tag == ATAG_CORE;
+}
+
+/* r2 верить можно, только если по нему реально читается список; иначе
+   fallback на зафиксированный 0x100. Путь обязательно печатается. */
+static unsigned int atags_pick(unsigned int r2)
+{
+    if (atag_head_ok(r2))
+        return r2;
+    if (atag_head_ok(0x100u))
+        return 0x100u;
+    return 0u;
+}
+
+/* synthetic-списки: проверки парсера не должны зависеть от того, оставила ли
+   прошивка теги. Здесь ровно то, что обязан правильно посчитать парсер:
+   3 тега и 512 МБ памяти суммарно. */
+static const unsigned int tags_good[] = {
+    5, ATAG_CORE, 1u, 0u, 0u,
+    4, ATAG_MEM, 256u * 1024u * 1024u, 0x00000000u,
+    4, ATAG_MEM, 256u * 1024u * 1024u, 0x10000000u,
+    0, 0
+};
+
+/* Тег «размером» больше всего списка — так выглядит мусор в памяти. */
+static const unsigned int tags_huge[] = { 2000u, ATAG_CORE, 0u, 0u, 0u, 0u, 0u };
+/* Тег меньше заголовка — парсер обязан встать, а не читать вечно. */
+static const unsigned int tags_stub[] = { 1u, ATAG_MEM, 0u, 0u };
+
+static void check_atags(unsigned int r2)
+{
+    struct atag_walk w = atag_walk_list((unsigned int)tags_good, 0);
+    unsigned int mb = (tags_good[7] + tags_good[11]) / (1024u * 1024u);
+
+    check(w.bad == ATAG_OK && w.tags == 3u && w.ram == mb * 1024u * 1024u,
+          "atag parser reads a synthetic list");
+    if (w.bad != ATAG_OK || w.tags != 3u) {
+        uart_puts("       walk: tags ");
+        putdec(w.tags);
+        uart_puts(", bad ");
+        putdec(w.bad);
+        uart_putc('\n');
+    }
+
+    /* Мусор должен быть отвергнут, а не приведёт к зависанию. */
+    check(atag_walk_list((unsigned int)tags_huge, 0).bad == ATAG_TOO_BIG,
+          "atag parser rejects an oversized tag");
+    check(atag_walk_list((unsigned int)tags_stub, 0).bad == ATAG_BAD_SIZE,
+          "atag parser rejects a sub-header tag");
+
+    check(atag_head_ok((unsigned int)tags_good) == 1 &&
+          atag_head_ok(0u) == 0 &&
+          atag_head_ok((unsigned int)tags_good + 1u) == 0 &&
+          atag_head_ok((unsigned int)tags_huge) == 0,
+          "atag pointer sanity accepts good, rejects junk");
+
+    /* Список от прошивки: в QEMU его нет, поэтому тут SKIP, а не FAIL. */
+    if (atags_pick(r2) != 0u) {
+        struct atag_walk fw = atag_walk_list(atags_pick(r2), 1);
+        check(fw.bad == ATAG_OK, "firmware tag list walks clean");
+        uart_puts("       firmware ram: ");
+        putdec(fw.ram / (1024u * 1024u));
+        uart_puts(" MB in ");
+        putdec(fw.tags);
+        uart_puts(" tags\n");
+    } else {
+        skip("firmware tag list walks clean");
+    }
+}
+
+/* Отчёт по прошивочным тегам: что нашли, каким путём, сколько памяти. */
 static void atags_report(unsigned int r2)
 {
-    unsigned int size_word = peek32(0x100u);
-    unsigned int tag = peek32(0x104u);
+    unsigned int base = atags_pick(r2);
 
-    info("atag @0x100  ", size_word);
-    info("atag id@0x104", tag);
+    info("atag @0x100  ", peek32(0x100u));
+    info("atag id@0x104", peek32(0x104u));
 
     /* Строки отчёта — только ASCII: на плате их читает последовательный
        терминал, у которого кодирование может быть любым. */
-    if (tag == 0x54410001u)
-        uart_puts("  atags      : ATAG_CORE present\n");
-    else
+    if (base == 0u) {
         uart_puts("  atags      : none (QEMU writes none; board must show 0x54410001)\n");
-
-    if (r2 == 0x100u)
-        uart_puts("  atags path : via r2\n");
-    else
-        uart_puts("  atags path : fallback 0x100 (r2 does not point at the list)\n");
+        uart_puts("  atags path : no valid list\n");
+    } else {
+        uart_puts("  atags      : list at 0x");
+        uart_puthex(base);
+        uart_putc('\n');
+        uart_puts("  atags path : ");
+        uart_puts(base == r2 ? "via r2\n" : "fallback 0x100\n");
+    }
 }
 
 static void selftest(unsigned int boot_r0, unsigned int machine, void *dtb)
@@ -336,12 +534,16 @@ static void selftest(unsigned int boot_r0, unsigned int machine, void *dtb)
 
     check(probe_regs_preserved(), "r0-r12 survive an exception");
 
+    check_atags((unsigned int)dtb);
+
     uart_puts("--- RESULT ---\n");
     uart_puts("selftest: ");
     putdec(checks_ok);
     uart_puts(" passed, ");
     putdec(checks_fail);
-    uart_puts(" failed\n");
+    uart_puts(" failed, ");
+    putdec(checks_skip);
+    uart_puts(" skipped\n");
     uart_puts(checks_fail == 0u ? "RESULT: PASS\n" : "RESULT: FAIL\n");
     /* Дамп паники в этот прогон не входит: он останавливает ядро.
        Проверяется отдельной сборкой (-DTEST_UND / -DTEST_SVC). */
