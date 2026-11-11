@@ -1,5 +1,7 @@
 /* uart.c — минимальный драйвер PL011 для Pi1 B+ */
 
+#include "uart.h"
+
 #define MMIO_BASE   0x20000000u
 
 /* --- GPIO --- */

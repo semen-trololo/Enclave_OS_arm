@@ -97,3 +97,18 @@ sections: $(ELF)
 
 
 .PHONY: all clean rebuild size disasm symbols sections
+
+QEMU := qemu-system-arm
+MACHINE := raspi1ap
+
+run: $(ELF)
+	$(QEMU) -M $(MACHINE) -kernel $(ELF) -display none -serial stdio -no-reboot
+
+debug: $(ELF)
+	$(QEMU) -M $(MACHINE) -kernel $(ELF) -display none -serial stdio -no-reboot -S -s
+
+check: $(ELF)
+	@$(CROSS_COMPILE)nm $(ELF) | grep -q '00008000 T _start' || (echo "FAIL"; exit 1)
+	@echo "OK: точка входа на месте"
+
+.PHONY: run debug check

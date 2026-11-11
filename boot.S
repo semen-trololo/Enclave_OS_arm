@@ -89,6 +89,35 @@ _vectors_start:
 .global _vectors_end
 _vectors_end:                       /* ВАЖНО: ПОСЛЕ .ltorg! */
 
+/* ============ ЗАГЛУШКИ ОБРАБОТЧИКОВ (настоящие — День 3) ============
+   Стоят в .text.boot сразу за пулом векторов: ldr pc, =… бьёт
+   только в пределах ±4 КБ от PC. Вечный цикл вместо возврата —
+   исключение тут заметен, а не улетает в произвольную память. */
+.align 2
+.global undef_handler
+undef_handler:
+    b       undef_handler
+
+.global svc_handler
+svc_handler:
+    b       svc_handler
+
+.global pabt_handler
+pabt_handler:
+    b       pabt_handler
+
+.global dabt_handler
+dabt_handler:
+    b       dabt_handler
+
+.global irq_handler
+irq_handler:
+    b       irq_handler
+
+.global fiq_handler
+fiq_handler:
+    b       fiq_handler
+
 /* ================= СТЕКИ (в .bss — не раздувают файл) ================= */
 .section .bss
 .align 3                            /* 2^3 = 8 байт (AAPCS) */
