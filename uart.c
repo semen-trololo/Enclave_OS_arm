@@ -67,3 +67,11 @@ void uart_puts(const char *s)
         uart_putc(*s++);
     }
 }
+
+static const char hex_digits[] = "0123456789abcdef";
+
+void uart_puthex(unsigned int v)
+{
+    for (int shift = 28; shift >= 0; shift -= 4)
+        uart_putc(hex_digits[(v >> shift) & 0xF]);
+}

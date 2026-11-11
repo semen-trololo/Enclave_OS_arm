@@ -4,7 +4,8 @@
 .global _start
 _start:
     /* ==== ВХОД: PC=0x8000, SVC, IRQ/FIQ off, SP = мусор ==== */
-    mov     r4, r2                  /* r4 := DTB; r4 не банкованный */
+    mov     r4, r2                  /* r4 := ATAGS/DTB; r4 не банкованный */
+    mov     r5, r1                  /* r5 := machine type от firmware */
 
     mrs     r0, cpsr                /* trust but verify: глушим IRQ/FIQ */
     orr     r0, r0, #0xC0
@@ -62,10 +63,10 @@ clear_bss:
     b       clear_bss
 bss_done:
 
-    /* ---- вызов kernel_main(0, 0xC42, dtb) по протоколу ARM Linux ---- */
+    /* ---- вызов kernel_main(r0, r1, r2) как их принёс firmware ---- */
     mov     r0, #0
-    ldr     r1, =0xC42              /* не mov! 0xC42 не кодируется в ARM-imm */
-    mov     r2, r4                  /* DTB из сохранённого r4 */
+    mov     r1, r5                  /* machine type: реальный регистр, не константа */
+    mov     r2, r4                  /* ATAGS/DTB из сохранённого r4 */
     bl      kernel_main
 
 hang:                               /* ядро не должно возвращаться */
@@ -89,34 +90,74 @@ _vectors_start:
 .global _vectors_end
 _vectors_end:                       /* ВАЖНО: ПОСЛЕ .ltorg! */
 
-/* ============ ЗАГЛУШКИ ОБРАБОТЧИКОВ (настоящие — День 3) ============
-   Стоят в .text.boot сразу за пулом векторов: ldr pc, =… бьёт
-   только в пределах ±4 КБ от PC. Вечный цикл вместо возврата —
-   исключение тут заметен, а не улетает в произвольную память. */
+/* ============ ОБРАБОТЧИКИ ИСКЛЮЧЕНИЙ (M1) ============
+   Стоят после _vectors_end — иначе копирка векторов утащила бы их на 0x0.
+
+   Кадр на стеке режима (64 байта, порядок обязан совпадать с
+   struct exc_frame в kernel_main.c):
+       [sp + 0  .. 51]  r0..r12
+       [sp + 52]        SPSR режима
+       [sp + 56]        LR_<режима> как его принёс процессор
+       [sp + 60]        PC проблемной инструкции = LR - delta
+
+   delta: у undef/svc/pabt/irq/fiq возвратный LR завышен на 4, у data
+   abort — на 8. Возврата из обработчика нет намеренно: сначала должен
+   появиться планировщик и контекст анклава (M6).
+
+   Кроме паники обработчик умеет ловить пробные исключения самопроверки:
+   если ядро выставило exc_probe, обработчик пишет номер в exc_caught и
+   возвращается на инструкцию СРАЗУ ПОСЛЕ ловушки (movs pc восстанавливает
+   CPSR из SPSR). Без exc_probe любое исключение = panic. */
+
+.macro EXC_HANDLER label, tag, tagid, delta
 .align 2
-.global undef_handler
-undef_handler:
-    b       undef_handler
+.global \label
+\label:
+    sub     sp, sp, #64             /* стек режима уже задан в _start */
+    stmia   sp, {r0-r12}            /* маскируем прерывания уже после сохранения: r0 ещё настоящий */
+    mrs     r0, cpsr
+    orr     r0, r0, #0xC0
+    msr     cpsr_c, r0
+    add     r12, sp, #52
+    mrs     r0, spsr
+    str     r0, [r12], #4           /* SPSR */
+    str     lr, [r12], #4           /* LR_<mode> */
+    sub     r0, lr, #\delta
+    str     r0, [r12]               /* PC исключения */
+    ldr     r1, =exc_pc
+    str     r0, [r1]
+    ldr     r1, =exc_probe
+    ldr     r1, [r1]
+    cmp     r1, #0
+    bne     9f
+    ldr     r0, =\tag
+    mov     r1, sp
+    bl      panic                   /* не возвращается */
+    b       .
+9:  ldr     r1, =exc_caught
+    mov     r2, #\tagid
+    str     r2, [r1]
+    add     lr, r0, #4              /* цель возврата — за проблемную инструкцию */
+    ldmia   sp, {r0-r12}
+    add     sp, sp, #64
+    movs    pc, lr
+.endm
 
-.global svc_handler
-svc_handler:
-    b       svc_handler
+EXC_HANDLER undef_handler, undef_tag, 1, 4
+EXC_HANDLER svc_handler,   svc_tag,   2, 4
+EXC_HANDLER pabt_handler,  pabt_tag,  3, 4
+EXC_HANDLER dabt_handler,  dabt_tag,  4, 8
+EXC_HANDLER irq_handler,   irq_tag,   5, 4
+EXC_HANDLER fiq_handler,   fiq_tag,   6, 4
+.ltorg
 
-.global pabt_handler
-pabt_handler:
-    b       pabt_handler
-
-.global dabt_handler
-dabt_handler:
-    b       dabt_handler
-
-.global irq_handler
-irq_handler:
-    b       irq_handler
-
-.global fiq_handler
-fiq_handler:
-    b       fiq_handler
+.section .rodata
+undef_tag:  .asciz "UNDEF INSTRUCTION"
+svc_tag:    .asciz "UNEXPECTED SVC"
+pabt_tag:   .asciz "PREFETCH ABORT"
+dabt_tag:   .asciz "DATA ABORT"
+irq_tag:    .asciz "UNEXPECTED IRQ"
+fiq_tag:    .asciz "UNEXPECTED FIQ"
 
 /* ================= СТЕКИ (в .bss — не раздувают файл) ================= */
 .section .bss
@@ -130,4 +171,5 @@ __abt_stack_top:
 und_stack:  .skip 4096
 __und_stack_top:
 svc_stack:  .skip 65536             /* 64 КБ ядру на boot-этап */
+.global __svc_stack_top             /* selftest в kernel_main.c сверяет SP */
 __svc_stack_top:
