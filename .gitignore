@@ -5,8 +5,3 @@ build/
 .qwen/settings.local.json
 .env
 *.local
-
-# Но команды, агенты и память коммитим (они без секретов)
-# .qwen/commands/
-# .qwen/agents/
-# .qwen/memory/
