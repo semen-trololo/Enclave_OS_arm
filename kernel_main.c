@@ -1,5 +1,9 @@
 #include "uart.h"
 
+/* Bare-metal типы (stdint.h недоступен в -nostdlib) */
+typedef unsigned int uint32_t;
+typedef unsigned char uint8_t;
+
 /* Кадр обязан совпадать с тем, что складывает EXC_HANDLER в boot.S:
    13 слов регистров, затем SPSR, LR_<mode> и вычисленный PC. */
 struct exc_frame {
