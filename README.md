@@ -1,3 +1,24 @@
+# Enclave OS — ARMv6 bare metal на Raspberry Pi 1 B+
+
+## Статус проекта (12.11.2026)
+
+```
+✅ M0 bootstrap: стеки всех режимов, векторы на 0x0, BSS обнулён
+✅ M1 обработчики исключений: кадр r0–lr, panic с дампом, pc = адрес инструкции
+✅ M2 проброс r0/r1/r2 + разбор ATAG с границами
+✅ Selftest: 11 PASS / 0 FAIL / 1 SKIP, RESULT: PASS
+🔴 Баги r0 и +&r исправлены в f194063
+
+📌 В планах:
+  M3 прерывания (VIC), M4 тик планировщика (timer),
+  M5 MMU + guard pages, M6 SVC-шлюз в User mode,
+  M7 round-robin на 2 анклава, M8 запуск на реальной плате
+```
+
+**Полная информация:** `.qwen/memory/context.md`, `.qwen/memory/architecture.md`, `.qwen/memory/decisions.md`
+
+---
+
 ## Конспект — День 1
 
 ### 1. Железо
@@ -378,6 +399,9 @@ post-increment ldr r3,[r0],#4, objdump для проверки.
 Банки регистров изолируют РЕЖИМЫ; между анклавами SP_usr
 виртуализует планировщик (struct enclave_ctx).
 ```
+
+---
+
 # Конспект: ассемблер + линкер. День 3
 
 ## 1. Что делает ассемблер
@@ -676,4 +700,59 @@ arm-none-eabi-readelf -s kernel.elf
 .bss: память есть, в файле нет, надо обнулить.
 .stack: SP = top, потому что стек растёт вниз.
 kernel.img: первая инструкция должна быть по адресу 0x8000.
+```
+
+---
+
+# Конспект: M1–M2 обработчики + selftest (12.11.2026)
+
+## M1: Обработчики исключений
+
+Реализованы через макрос `EXC_HANDLER` в `boot.S`:
+- Кадр на стеке: `r0–r12`, `spsr`, `lr`, `pc` (64 байта)
+- Обработчики стоят после `_vectors_end` — не копируются на 0x0
+- `exc_probe == 0` → panic с дампом регистров
+- `exc_probe != 0` → запись номера в `exc_caught`, возврат на инструкцию после ловушки
+- Поддержка: Undef (δ=4), SVC (δ=4), Prefetch Abort (δ=4), Data Abort (δ=4, frame_pc сдвиг на 4)
+
+## M2: ATAG-парсер
+
+Прошивка GPU оставляет список тегов по адресу из `r2` (fallback 0x100):
+- `size` (слова) → `tag` (номер) → данные
+- Проверки: выравнивание, `size >= 2`, `size <= 1024`, максимум 64 тега
+- Конец: `size == 0` (ATAG_NONE)
+- `atag_head_ok()` — проверка: первый тег ATAG_CORE, размер правдоподобен
+- Синтетические тесты: 3 тега = 512 МБ, oversized tag → TOO_BIG, stub tag → BAD_SIZE
+
+## Selftest
+
+Печатает в UART:
+```
+--- INFO ---
+  cpu id       0x...
+  boot r0      0x0
+  boot r1 mach 0xc42
+  boot r2 atags 0x...
+--- CHECKS ---
+[PASS] cpu part number is ARM1176 (0xb76)
+[PASS] bss zeroed by boot.S
+[PASS] vector table lives at 0x00000000
+[PASS] svc stack is the one boot.S set up
+[PASS] undef instruction trapped and resumed
+[PASS] svc trapped and resumed
+[PASS] r0-r12 survive an exception
+[SKIP] firmware tag list walks clean  ← QEMU не передаёт ATAGS
+--- RESULT ---
+selftest: 11 passed, 0 failed, 1 skipped
+RESULT: PASS
+```
+
+## Инструменты
+
+```sh
+make check          # проверка точки входа
+make size           # text 5941, data 0, bss 81976
+make disasm         # дизассемблирование
+make symbols        # символы
+make debug          # QEMU + gdb
 ```
