@@ -6,9 +6,7 @@
 - [x] M2 проброс `r0`/`r1`/`r2` + разбор ATAG с границами (14c1f45), проверено в QEMU
 - [x] Selftest в основном образе: 11 PASS / 0 FAIL / 1 SKIP, `RESULT: PASS`
 - [x] Драйвер PL011 115200 8N1, linker.ld на 0x8000, makefile (run/check/debug/disasm)
-
-## В работе
-- [ ] Правки в boot.S и kernel_main.c не закоммичены — сверять с `git status`
+- [x] Исправление критического бага r0 (f194063), constraint `+&r` (f194063)
 
 ## В планах
 - [ ] M3 прерывания: VIC 0x2000B200, линия PL011 = 57, снятие источника, `CPSR.I`
