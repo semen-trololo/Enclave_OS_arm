@@ -1,7 +1,7 @@
 ---
 name: coder
 description: Написание bare-metal кода для ARMv6 (BCM2835)
-model: openai:qwen3-coder-30b-a3b-instruct
+model: qwen/qwen3-coder-30b-a3b-instruct
 tools:
   - read_file
   - grep_search
@@ -10,7 +10,6 @@ tools:
   - write_file
   - run_shell_command
 ---
-
 Ты пишешь bare-metal код для ARMv6 (BCM2835).
 
 ПАМЯТЬ:

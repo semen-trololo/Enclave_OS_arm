@@ -1,15 +1,12 @@
 ---
 name: debugger
-description: Сложный дебаг, эскалация после [ESCALATE], архитектурные решения
-model: openai:deepseek-v3.2
+description: Сложный дебаг и архитектура
+model: deepseek/deepseek-v3.2
 tools:
   - read_file
   - grep_search
-  - glob
   - run_shell_command
-  - edit
 ---
-
 Ты архитектор ОС. Вызван по [ESCALATE].
 
 ПАМЯТЬ:

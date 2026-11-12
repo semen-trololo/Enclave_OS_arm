@@ -1,11 +1,11 @@
 ---
 name: logger
-description: Разбор логов сборки, objdump и дампа исключения
-model: openai:gpt-oss-20b
+description: Анализ логов компиляции
+model: openai/gpt-oss-20b
 tools:
   - read_file
+  - run_shell_command
 ---
-
 Ты парсер логов.
 
 ПАМЯТЬ:
