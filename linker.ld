@@ -21,3 +21,7 @@ SECTIONS
 
     __kernel_end = .;
 }
+
+/* RAM: 512 МБ всего, low memory 0x0–0x7FFF зарезервировано */
+/* Если .bss + стек не влезает — уменьши svc_stack или размеры остальных */
+ASSERT(__bss_end < 0x20000000, "ERROR: kernel image exceeds RAM boundary")
