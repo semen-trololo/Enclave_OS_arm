@@ -491,6 +491,42 @@ static void atags_report(unsigned int r2)
     }
 }
 
+/* ===== Светодиод ACT как второй канал диагностики =====
+   Пока UART под подозрением, канал проверки не должен от него зависеть:
+   если отчёт не пришёл, по числу вспышек видно, как далеко успело зайти
+   ядро. На Pi 1 B+ ACT висит на GPIO16 и горит при нуле на ноге
+   (активный низкий), поэтому «зажечь» — это GPCLR2, а «погасить» — GPSET2. */
+#define GPIO_BASE   0x20200000u
+#define GPIO_FSEL4  (*(volatile unsigned int *)(GPIO_BASE + 0x10u))
+#define GPIO_SET2   (*(volatile unsigned int *)(GPIO_BASE + 0x1Cu))
+#define GPIO_CLR2   (*(volatile unsigned int *)(GPIO_BASE + 0x20u))
+#define ACT_BIT     (1u << 16)
+
+static void led_delay(void)
+{
+    /* volatile запрещает выбросить цикл: без него -O2 оставил бы пустоту */
+    for (volatile unsigned int i = 0; i < 10000000u; i++)
+        ;
+}
+
+/* n вспышек — это этап загрузки. 3 = _start (задаёт boot.S),
+   5 = uart_init вернулся, то есть C-часть жива и PL011 инициализирован. */
+static void led_code(int n)
+{
+    unsigned int r = GPIO_FSEL4;
+
+    r &= ~(7u << 18);         /* GPFSEL4, поле FSEL16: ноги 15..19 по 3 бита */
+    r |= 1u << 18;            /* 001 = выход */
+    GPIO_FSEL4 = r;
+
+    for (int i = 0; i < n; i++) {
+        GPIO_CLR2 = ACT_BIT;
+        led_delay();
+        GPIO_SET2 = ACT_BIT;
+        led_delay();
+    }
+}
+
 static void selftest(unsigned int boot_r0, unsigned int machine, void *dtb)
 {
     struct probe_result und;
@@ -501,6 +537,11 @@ static void selftest(unsigned int boot_r0, unsigned int machine, void *dtb)
 
     uart_puts("Enclave OS boot\n");
     uart_puts("BCM2835 / ARM1176JZF-S - boot report\n");
+
+    /* Пять вспышек = uart_init и два uart_puts прошли, то есть драйвер не
+       завис в ожидании освобождения TX-FIFO. Дальше молчание UART может быть
+       только из-за линии (земля, ножка, скорость), но не из-за кода. */
+    led_code(5);
 
     uart_puts("--- INFO ---\n");
     info("cpu id       ", id);
