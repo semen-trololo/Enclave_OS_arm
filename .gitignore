@@ -1,4 +1,5 @@
 build/
+sd/
 
 # Локальные настройки и секреты
 .qwen/settings.json
