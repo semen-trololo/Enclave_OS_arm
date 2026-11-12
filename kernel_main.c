@@ -271,7 +271,7 @@ static int probe_regs_preserved(void)
     asm volatile(
         "svc #0\n\t"
         "nop\n\t"
-        : "+r"(v)
+        : "+&r"(v)                    /* early-clobber: v не может пересекаться с метками */
         :
         : "memory", "cc", "lr");
     exc_probe = 0u;

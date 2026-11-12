@@ -95,8 +95,9 @@ clear_bss:
     b       clear_bss
 bss_done:
 
-    /* ---- вызов kernel_main(r0, r1, r2) как их принёс firmware ---- */
-    mov     r0, #0
+    /* ---- вызов kernel_main(r0, r1, r2) как их принёс firmware ----
+       firmware уже передал r0=0, r1=machine_type, r2=ATAGS/DTB.
+       Сохранённые r5/r4 — оригинальные значения, r0 не перетираем. */
     mov     r1, r5                  /* machine type: реальный регистр, не константа */
     mov     r2, r4                  /* ATAGS/DTB из сохранённого r4 */
     bl      kernel_main
