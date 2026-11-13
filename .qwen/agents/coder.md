@@ -1,9 +1,15 @@
 ---
 name: coder
-description: Реализует план оркестратора: изучает код, правит, собирает, тестирует в QEMU.
-model: qwen/qwen3-coder-480b-a35b   # сверь слаг в /models; эконом-режим: qwen/qwen3-coder-next
+description: "Реализует план оркестратора: изучает код, правит, собирает, тестирует в QEMU."
+model: qwen/qwen3-coder-480b-a35b
 approvalMode: auto-edit
-tools: [read_file, grep_search, glob, edit, write_file, run_shell_command]
+tools:
+  - read_file
+  - grep_search
+  - glob
+  - edit
+  - write_file
+  - run_shell_command
 ---
 Ты — кодер Enclave OS (ARMv6, BCM2835, Pi 1 B+). Получаешь план и выполняешь автономно.
 
