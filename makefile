@@ -1,51 +1,38 @@
-# Makefile — Enclave OS, Raspberry Pi 1 B+ (BCM2835, ARM1176JZF-S)
+# Enclave OS Makefile
 
-# Кросс-компилятор
-CROSS_COMPILE := arm-none-eabi-
-CC            := $(CROSS_COMPILE)gcc
-AS            := $(CROSS_COMPILE)as
-LD            := $(CROSS_COMPILE)ld
-OBJCOPY       := $(CROSS_COMPILE)objcopy
+CC            := arm-none-eabi-gcc
+AS            := arm-none-eabi-as
+LD            := arm-none-eabi-ld
 
-# Папки
+# Flags
+CFLAGS        := -Wall -Wextra -nostdlib -nostartfiles -ffreestanding -march=armv6 -mfloat-abi=hard -mfpu=vfp
+LDFLAGS       := -T linker.ld
+
+# Directories
 BUILD_DIR     := build
-TARGET        := $(BUILD_DIR)/kernel.img
-ELF           := $(BUILD_DIR)/kernel.elf
-MAP           := $(BUILD_DIR)/kernel.map
+SRC_DIR       := .
 
-# Флаги компиляции
-CPU           := arm1176jzf-s
-CFLAGS        := -mcpu=$(CPU) -marm -ffreestanding -nostdlib \
-                 -mfloat-abi=soft -Wall -Wextra -O2
-ASFLAGS       := -mcpu=$(CPU)
-LDFLAGS       := -T linker.ld -nostdlib -Map $(MAP)
-
-# Исходники и объекты
-ASM_SRC       := boot.S
+# Files
 C_SRC         := kernel_main.c interrupt.c
+ASM_SRC       := boot.S
 
-ASM_OBJ       := $(BUILD_DIR)/boot.o
+# Objects
 C_OBJ         := $(BUILD_DIR)/kernel_main.o $(BUILD_DIR)/interrupt.o
+ASM_OBJ       := $(BUILD_DIR)/boot.o
 
-# Все объекты
-OBJ           := $(ASM_OBJ) $(C_OBJ)
+# Target
+TARGET        := kernel.elf
 
+# Default target
+all: $(BUILD_DIR)/$(TARGET)
 
-# Основная цель: собрать ядро и положить в build/
-all: $(TARGET)
-	@echo "=== Сборка завершена ==="
-	@echo "kernel.img -> $(TARGET)"
-
-
-# Создать папку build
+# Create build directory
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-
-# Ассемблер: boot.S -> boot.o
-$(ASM_OBJ): $(ASM_SRC) | $(BUILD_DIR)
-	$(AS) $(ASFLAGS) $< -o $@
-
+# Linker script
+$(BUILD_DIR)/$(TARGET): $(C_OBJ) $(ASM_OBJ) | $(BUILD_DIR)
+	$(LD) $(LDFLAGS) -o $@ $^
 
 # C: kernel_main.c -> kernel_main.o
 $(BUILD_DIR)/kernel_main.o: kernel_main.c | $(BUILD_DIR)
@@ -55,58 +42,24 @@ $(BUILD_DIR)/kernel_main.o: kernel_main.c | $(BUILD_DIR)
 $(BUILD_DIR)/interrupt.o: interrupt.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Линковка: все .o -> kernel.elf
-$(ELF): $(OBJ) linker.ld
-	$(LD) $(LDFLAGS) $(OBJ) -o $@
+# Assembly: boot.S -> boot.o
+$(BUILD_DIR)/boot.o: boot.S | $(BUILD_DIR)
+	$(AS) -o $@ $<
 
-
-# objcopy: kernel.elf -> kernel.img
-$(TARGET): $(ELF)
-	$(OBJCOPY) -O binary $< $@
-
-
-# Очистка
+# Clean
 clean:
 	rm -rf $(BUILD_DIR)
 
+# Install
+install: $(BUILD_DIR)/$(TARGET)
+	cp $< /media/boot/kernel.elf
 
-# Пересобрать с нуля
-rebuild: clean all
+# Run in QEMU
+qemu: $(BUILD_DIR)/$(TARGET)
+	qemu-system-arm -M raspi1ap -kernel $< -display none -serial stdio -no-reboot
 
+# Run with serial log
+qemu-log: $(BUILD_DIR)/$(TARGET)
+	qemu-system-arm -M raspi1ap -kernel $< -display none -serial file:/tmp/qemu_serial.txt -no-reboot 2>&1 &
 
-# Печать информации о размере
-size: $(ELF)
-	$(CROSS_COMPILE)size $<
-
-
-# Дизассемблировать ядро
-disasm: $(ELF)
-	$(CROSS_COMPILE)objdump -d $<
-
-
-# Посмотреть символы
-symbols: $(ELF)
-	$(CROSS_COMPILE)nm $< | sort
-
-
-# Посмотреть секции
-sections: $(ELF)
-	$(CROSS_COMPILE)objdump -h $<
-
-
-.PHONY: all clean rebuild size disasm symbols sections
-
-QEMU := qemu-system-arm
-MACHINE := raspi1ap
-
-run: $(ELF)
-	$(QEMU) -M $(MACHINE) -kernel $(ELF) -display none -serial stdio -no-reboot
-
-debug: $(ELF)
-	$(QEMU) -M $(MACHINE) -kernel $(ELF) -display none -serial stdio -no-reboot -S -s
-
-check: $(ELF)
-	@$(CROSS_COMPILE)nm $(ELF) | grep -q '00008000 T _start' || (echo "FAIL"; exit 1)
-	@echo "OK: точка входа на месте"
-
-.PHONY: run debug check
+.PHONY: all clean install qemu qemu-log
