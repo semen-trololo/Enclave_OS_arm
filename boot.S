@@ -138,7 +138,7 @@ _vectors_end:                       /* ВАЖНО: ПОСЛЕ .ltorg! */
 9:  ldr     r1, =exc_caught
     mov     r2, #\tagid
     str     r2, [r1]
-    add     lr, r0, #4              /* цель возврата — за проблемную инструкцию */
+    add     lr, r0, #\delta         /* цель возврата — за проблемную инструкцию */
     ldmia   sp, {r0-r12}
     add     sp, sp, #64
     movs    pc, lr

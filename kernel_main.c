@@ -71,14 +71,14 @@ void kernel_main(unsigned int r0, unsigned int machine, void *dtb)
     UART_CR = 0;
     UART_IBRD = 1;
     UART_FBRD = 40;
-    UART_LCRH = 0x60;
+    UART_LCRH = 0x70;
     UART_CR = (1u << 0) | (1u << 8);
 
     /* 4. Спам */
     uart_puts("Enclave OS Booting...\r\n");
 
+    /* 5. Idle loop с WFI */
     while (1) {
-        for (volatile unsigned int i = 0; i < 70000000u; i++)
-            ;
+        __asm__ volatile("wfi");
     }
 }
