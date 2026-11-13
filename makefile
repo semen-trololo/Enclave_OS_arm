@@ -22,10 +22,10 @@ LDFLAGS       := -T linker.ld -nostdlib -Map $(MAP)
 
 # Исходники и объекты
 ASM_SRC       := boot.S
-C_SRC         := kernel_main.c
+C_SRC         := kernel_main.c interrupt.c
 
 ASM_OBJ       := $(BUILD_DIR)/boot.o
-C_OBJ         := $(BUILD_DIR)/kernel_main.o
+C_OBJ         := $(BUILD_DIR)/kernel_main.o $(BUILD_DIR)/interrupt.o
 
 # Все объекты
 OBJ           := $(ASM_OBJ) $(C_OBJ)
@@ -49,6 +49,10 @@ $(ASM_OBJ): $(ASM_SRC) | $(BUILD_DIR)
 
 # C: kernel_main.c -> kernel_main.o
 $(BUILD_DIR)/kernel_main.o: kernel_main.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# C: interrupt.c -> interrupt.o
+$(BUILD_DIR)/interrupt.o: interrupt.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Линковка: все .o -> kernel.elf

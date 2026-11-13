@@ -1,5 +1,7 @@
 /* kernel_main.c — 1 вспышка LED + UART спам */
 
+#include "interrupt.h"
+
 /* ===== GPIO47 LED (высокий = горит) ===== */
 #define GPIO_BASE   0x20200000u
 #define GPIO_FSEL4  (*(volatile unsigned int *)(GPIO_BASE + 0x10u))
@@ -74,7 +76,10 @@ void kernel_main(unsigned int r0, unsigned int machine, void *dtb)
     UART_LCRH = 0x70;
     UART_CR = (1u << 0) | (1u << 8);
 
-    /* 4. Спам */
+    /* 4. Инициализация прерываний */
+    vic_init();
+
+    /* 5. Спам */
     uart_puts("Enclave OS Booting...\r\n");
 
     /* 5. Idle loop с WFI */
