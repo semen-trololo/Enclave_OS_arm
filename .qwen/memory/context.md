@@ -7,6 +7,11 @@
 - [x] Selftest в основном образе: 11 PASS / 0 FAIL / 1 SKIP, `RESULT: PASS`
 - [x] Драйвер PL011 115200 8N1, linker.ld на 0x8000, makefile (run/check/debug/disasm)
 - [x] Исправление критического бага r0 (f194063), constraint `+&r` (f194063)
+- [x] **Материальный запуск на Pi 1 B+: UART подтверждён (13.11.2026)**
+  - boot.S LED-мигание убрано (33 строки)
+  - kernel_main: 1 вспышка GPIO47 → UART инициализация → спам "Enclave OS Booting..."
+  - config.txt: `init_uart_clock=3000000`, `core_freq=250`
+  - Размер образа: 1,6 КБ
 
 ## В планах
 - [ ] M3 прерывания: VIC 0x2000B200, линия PL011 = 57, снятие источника, `CPSR.I`
@@ -14,7 +19,7 @@
 - [ ] M5 MMU + section-таблицы 1 МБ, device/nGnRE для периферии, guard page
 - [ ] M6 SVC-шлюз + вход в User mode + `struct enclave_ctx`
 - [ ] M7 round-robin на 2 анклава; M7.5 — selftest покрывает M1–M7
-- [ ] M8 запуск на Raspberry Pi 1 Model B+ по настоящему UART
+- [ ] M8 запуск на Raspberry Pi 1 Model B+ по настоящему — **НАЧАТО (13.11.2026)**: UART подтверждён, LED-индикация работает, selftest встраивается обратно
 
 ## Размеры
-text 5941, data 0, bss 81976 байт
+text ~1000, data 0, bss ~82 КБ (kernel.img 1,6 КБ)

@@ -21,7 +21,7 @@
 - Файлы: makefile
 
 ## 2026-11-12: Роли моделей — субагентами, а не командами
-- Причина: загрузчик `.qwen/commands/*.md` читает только description / when_to_use / argument-hint, поле `model:` игнорируется; `model:` поддержан у субагентов, включая форму `openai:<id>`
+- Причина: загрузчик `.qwen/commands/*.md` читает только description / when_to_use / argument-hint, поле `model:` игнорируется; `model:` поддержано у субагентов, включая форму `openai:<id>`
 - Альтернативы: команды с `model:` (всё пошло бы на главную модель, экономии нет), только субагенты без точек входа
 - Файлы: .qwen/agents/, .qwen/commands/
 
@@ -29,3 +29,23 @@
 - Причина: код-ревью, исправления boot.S/kernel_main.c, обновление памяти — всё выполнено без делегирования `coder`/`debugger`. QWEN.md обязует делегировать; скиллы `code`/`debug`/`remember-bug` настроены, но не использованы.
 - Альтернативы: делегировать через `tool_call(agent, subagent_type: "coder"/"debugger")` как определено в QWEN.md
 - Файлы: QWEN.md, .qwen/agents/, .qwen/commands/
+
+## 2026-11-13: UART PL011 в kernel_main.c inline (без отдельного uart.c)
+- Причина: uart.c вызывал зависание из-за GPPUDCLK и отсутствия таймаутов; inline-код проще отлаживать на железе
+- Решение: `uart_putc()` и `uart_puts()` прямо в kernel_main.c, таймаут `0xFFFFFF` в `uart_putc()`
+- Файлы: kernel_main.c
+
+## 2026-11-13: LED-мигание перенесено в kernel_main (убрано из boot.S)
+- Причина: 3 вспышки от boot.S на GPIO16 путали с ядром; нужно показывать именно достижение kernel_main
+- Решение: удалить блок `led_blink`/`led_hold`/`led_off` (33 строки), оставить 1 вспышку GPIO47 в kernel_main
+- Файлы: boot.S, kernel_main.c
+
+## 2026-11-13: init_uart_clock=3000000 и core_freq=250 в config.txt
+- Причина: без этих строк прошивка давала другой такт UART → делители IBRD=1/FBRD=40 давали не 115200
+- Решение: жёстко задать `init_uart_clock=3000000` и `core_freq=250`
+- Файлы: config.txt
+
+## 2026-11-13: GPIO47 для LED (активный высокий), а не GPIO16
+- Причина: GPIO16 = ACT-LED на плате (активный низкий), его логика инвертирована; GPIO47 = свободный пин, прямой вывод через GPSET1/GPCLR1
+- Решение: GPFSEL4 биты [23:21] = 001 (выход), GPSET1 бит 15 = горит, GPCLR1 бит 15 = не горит
+- Файлы: kernel_main.c
