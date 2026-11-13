@@ -29,3 +29,15 @@ void led_off(void)
 {
     GPIO_GPCLR1 = LED_BIT;
 }
+
+void led_toggle(void)
+{
+    static int state = 0;
+    if (state == 0) {
+        led_on();
+        state = 1;
+    } else {
+        led_off();
+        state = 0;
+    }
+}

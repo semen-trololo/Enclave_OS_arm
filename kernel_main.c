@@ -10,29 +10,35 @@ volatile unsigned int exc_pc = 0;
 
 void panic(const char* msg, void* addr) {
     while(1) {
-        // Infinite loop - should never reach here  
+        // Infinite loop - should never reach here
     }
 }
 
 void kernel_main(unsigned int r0, unsigned int r1, void* r2) {
     // Initialize peripherals
-    
+
     // Initialize UART
     uart_init();
-    
+
     // Test UART output first
     uart_puts("Enclave OS: Starting...\n");
-    
-    // Initialize LED  
-    led_init_gpio();
-    
+
+    // Initialize LED
+    led_init();
+
     // Enable UART pinmuxing
     // GPIO14 (TX) and GPIO15 (RX) in Alt0
     // This configuration is done in boot.S in a real implementation
-    
+
     uart_puts("Enclave OS: Hello world!\n");
 
-    // Test LED functionality  
+    // Initialize interrupt controller (M3)
+    vic_init();
+
+    // Enable global IRQs
+    __asm__("cpsie i");
+
+    // Test LED functionality
     for(int i = 0; i < 10; i++) {
         led_toggle();
         uart_puts("LED toggled\n");

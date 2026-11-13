@@ -13,11 +13,11 @@ BUILD_DIR     := build
 SRC_DIR       := .
 
 # Files
-C_SRC         := kernel_main.c interrupt.c
+C_SRC     := kernel_main.c interrupt.c uart.c led.c
 ASM_SRC       := boot.S
 
 # Objects
-C_OBJ         := $(BUILD_DIR)/kernel_main.o $(BUILD_DIR)/interrupt.o
+C_OBJ         := $(BUILD_DIR)/kernel_main.o $(BUILD_DIR)/interrupt.o $(BUILD_DIR)/uart.o $(BUILD_DIR)/led.o
 ASM_OBJ       := $(BUILD_DIR)/boot.o
 
 # Target
@@ -40,6 +40,14 @@ $(BUILD_DIR)/kernel_main.o: kernel_main.c | $(BUILD_DIR)
 
 # C: interrupt.c -> interrupt.o
 $(BUILD_DIR)/interrupt.o: interrupt.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# C: uart.c -> uart.o
+$(BUILD_DIR)/uart.o: uart.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# C: led.c -> led.o
+$(BUILD_DIR)/led.o: led.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Assembly: boot.S -> boot.o
