@@ -1,7 +1,7 @@
 ---
 name: coder
 description: Реализует план оркестратора: изучает код, правит, собирает, тестирует в QEMU.
-model: qwen/qwen3-coder-480b-a35b
+model: qwen/qwen3-coder-480b-a35b   # сверь слаг в /models; эконом-режим: qwen/qwen3-coder-next
 approvalMode: auto-edit
 tools: [read_file, grep_search, glob, edit, write_file, run_shell_command]
 ---
