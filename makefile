@@ -22,9 +22,10 @@ ASM_OBJ       := $(BUILD_DIR)/boot.o
 
 # Target
 TARGET        := kernel.elf
+IMG           := kernel.img
 
 # Default target
-all: $(BUILD_DIR)/$(TARGET)
+all: $(BUILD_DIR)/$(IMG)
 
 # Create build directory
 $(BUILD_DIR):
@@ -33,6 +34,10 @@ $(BUILD_DIR):
 # Linker script
 $(BUILD_DIR)/$(TARGET): $(C_OBJ) $(ASM_OBJ) | $(BUILD_DIR)
 	$(LD) $(LDFLAGS) -o $@ $^
+
+# Convert ELF to raw binary for Raspberry Pi
+$(BUILD_DIR)/$(IMG): $(BUILD_DIR)/$(TARGET)
+	arm-none-eabi-objcopy -O binary $< $@
 
 # C: kernel_main.c -> kernel_main.o
 $(BUILD_DIR)/kernel_main.o: kernel_main.c | $(BUILD_DIR)
@@ -59,8 +64,8 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 # Install
-install: $(BUILD_DIR)/$(TARGET)
-	cp $< /media/boot/kernel.elf
+install: $(BUILD_DIR)/$(IMG)
+	cp $< /media/boot/kernel.img
 
 # Run in QEMU
 qemu: $(BUILD_DIR)/$(TARGET)
