@@ -1,44 +1,45 @@
-#include <stdint.h>
-#include "uart.h"
+/* kernel_main.c: Enclave OS for Raspberry Pi 1 B+ */
 #include "led.h"
+#include "uart.h"
 #include "interrupt.h"
 
-extern void panic(const char* msg, void* addr);
+// Global variables for exception handling
+volatile unsigned int exc_probe = 0;
+volatile unsigned int exc_caught = 0;
+volatile unsigned int exc_pc = 0;
 
-/* Для отладки исключений - see boot.S */
-volatile int exc_probe = 0;         /* 0 = no exception, 1 = in handler */
-volatile int exc_caught = 0;        /* 0 = no exception, 1 = exception handled */
-volatile void* exc_pc = 0;          /* PC when exception taken */
-
-void kernel_main(unsigned int machine_type, unsigned int atags, void* dtb) {
-    (void)machine_type;
-    (void)atags;
-    (void)dtb;
-
-    /* --- Настройка GPIO14/15 в Alt0 для UART --- */
-    volatile uint32_t* gpfsel1 = (volatile uint32_t*)0x20200004; // GPFSEL1
-    uint32_t r = *gpfsel1;
-    r &= ~(7<<12);  // GPIO14
-    r |= 4<<12;     // Alt0
-    r &= ~(7<<15);  // GPIO15
-    r |= 4<<15;     // Alt0
-    *gpfsel1 = r;
-
-    /* --- UART --- */
-    uart_init();
-    uart_puts("\nHello from Enclave OS\n");
-
-    /* --- LED --- */
-    led_init_gpio(); // Пина 47
-    
-    /* Инициализация VIC */
-    vic_init();
-    
-    /* Разрешаем прерывания */
-    __asm__ volatile("cpsie i");
-    
+void panic(const char* msg, void* addr) {
     while(1) {
-        uart_putc('A');
+        // Infinite loop - should never reach here  
+    }
+}
+
+void kernel_main(unsigned int r0, unsigned int r1, void* r2) {
+    // Initialize peripherals
+    
+    // Initialize UART
+    uart_init();
+    
+    // Test UART output first
+    uart_puts("Enclave OS: Starting...\n");
+    
+    // Initialize LED  
+    led_init_gpio();
+    
+    // Enable UART pinmuxing
+    // GPIO14 (TX) and GPIO15 (RX) in Alt0
+    // This configuration is done in boot.S in a real implementation
+    
+    uart_puts("Enclave OS: Hello world!\n");
+
+    // Test LED functionality  
+    for(int i = 0; i < 10; i++) {
         led_toggle();
+        uart_puts("LED toggled\n");
+    }
+
+    // Main kernel loop
+    while(1) {
+        // Loop forever
     }
 }
