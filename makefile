@@ -22,10 +22,10 @@ LDFLAGS       := -T linker.ld -nostdlib -Map $(MAP)
 
 # Исходники и объекты
 ASM_SRC       := boot.S
-C_SRC         := kernel_main.c uart.c
+C_SRC         := kernel_main.c
 
 ASM_OBJ       := $(BUILD_DIR)/boot.o
-C_OBJ         := $(BUILD_DIR)/kernel_main.o $(BUILD_DIR)/uart.o
+C_OBJ         := $(BUILD_DIR)/kernel_main.o
 
 # Все объекты
 OBJ           := $(ASM_OBJ) $(C_OBJ)
@@ -50,12 +50,6 @@ $(ASM_OBJ): $(ASM_SRC) | $(BUILD_DIR)
 # C: kernel_main.c -> kernel_main.o
 $(BUILD_DIR)/kernel_main.o: kernel_main.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
-
-
-# C: uart.c -> uart.o
-$(BUILD_DIR)/uart.o: uart.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
 
 # Линковка: все .o -> kernel.elf
 $(ELF): $(OBJ) linker.ld
