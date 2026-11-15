@@ -1,12 +1,16 @@
-/* led.c — GPIO47 (ACT LED) control for Pi 1 B+ */
+/* led.c — ACT LED на Pi 1 B+.
+ *  На B+ светодиод переехал с GPIO16 (как на B) на GPIO47,
+ *  полярность прямая: 1 = горит, 0 = погашен (подтверждено на плате).
+ *  GPIO47 не выведен на гребёнку — только светодиод.
+ *  В QEMU запись в GPIO безвредна, но светодиода там нет. */
 
 #include "led.h"
 
 #define GPIO_BASE   0x20200000u
 
-/* GPIO47: GPFSEL4 bits [23:21] = 001 (output)
-   GPSET1 bit 15: write 1 to set (turn ON)
-   GPCLR1 bit 15: write 1 to clear (turn OFF) */
+/* GPIO47: GPFSEL4 биты [23:21] = 001 (output)
+ *  GPSET1 бит 15 (47-32): записать 1 — поднять пин
+ *  GPCLR1 бит 15: записать 1 — опустить пин */
 #define GPIO_FSEL4      (*(volatile unsigned int *)(GPIO_BASE + 0x10u))
 #define GPIO_GPSET1     (*(volatile unsigned int *)(GPIO_BASE + 0x20u))
 #define GPIO_GPCLR1     (*(volatile unsigned int *)(GPIO_BASE + 0x2Cu))
@@ -15,8 +19,8 @@
 void led_init(void)
 {
     unsigned int r = GPIO_FSEL4;
-    r &= ~(7u << 21);      /* clear bits [23:21] */
-    r |= (1u << 21);       /* set bits [23:21] = 001 (output) */
+    r &= ~(7u << 21);
+    r |=  (1u << 21);      /* output */
     GPIO_FSEL4 = r;
 }
 

@@ -1,0 +1,34 @@
+
+Enclave OS — ARMv6 bare metal (Raspberry Pi 1 B+)
+boot: r0=0x00000000 r1=0x00000c42 r2=0x00000000
+--- INFO ---
+  cpu id       0x410fb767
+  machine type 0x00000c42
+  atags/dtb    0x00000000
+--- SELFTEST ---
+[PASS] cpu part number is ARM1176 (0xb76)
+[PASS] bss zeroed by boot.S
+[PASS] vector table lives at 0x00000000
+[PASS] svc stack is the one boot.S set up
+[PASS] undef instruction trapped and resumed
+[PASS] svc trapped and resumed
+[PASS] r0-r12 survive an exception
+[SKIP] firmware tag list walks clean (no ATAGS)
+[PASS] atag synth: valid list parsed
+[PASS] atag synth: oversized tag rejected
+[PASS] atag synth: bad size rejected
+[PASS] timer IRQ received (systimer C1)
+[PASS] timer ticks advance
+--- RESULT ---
+selftest: 12 passed, 0 failed, 1 skipped
+RESULT: PASS
+--- RUN ---
+heartbeat: LED 1 Hz, tick 100 ms (IRQ-driven)
+alive: ticks=14 irq=14 spurious=0 uptime=1s
+alive: ticks=24 irq=24 spurious=0 uptime=2s
+alive: ticks=34 irq=34 spurious=0 uptime=3s
+alive: ticks=44 irq=44 spurious=0 uptime=4s
+alive: ticks=54 irq=54 spurious=0 uptime=5s
+alive: ticks=64 irq=64 spurious=0 uptime=6s
+alive: ticks=74 irq=74 spurious=0 uptime=7s
+alive: ticks=84 irq=84 spurious=0 uptime=8s

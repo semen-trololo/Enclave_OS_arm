@@ -1,4 +1,4 @@
-/* led.h — GPIO47 (ACT LED) control for Pi 1 B+ */
+/* led.h — ACT LED (GPIO47) на Raspberry Pi 1 B+ */
 
 #ifndef LED_H
 #define LED_H

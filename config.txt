@@ -1,4 +1,8 @@
+# Enclave OS — Raspberry Pi 1 B+
 kernel=kernel.img
+kernel_address=0x8000
+
+# UART0 (PL011) на GPIO14/15, 115200 8N1
 enable_uart=1
 init_uart_clock=3000000
 core_freq=250
