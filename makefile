@@ -24,7 +24,7 @@ CFLAGS   := $(CPUFLAGS) -O2 -g -Wall -Wextra -std=gnu11 -ffreestanding \
 ASFLAGS  := -mcpu=arm1176jzf-s   # gas по умолчанию в ARM-режиме; -marm у as нет
 LDFLAGS  := -nostdlib -Wl,-T,linker.ld -Wl,-Map,$(BUILD)/kernel.map
 
-C_SRC := kernel_main.c uart.c led.c interrupt.c timer.c
+C_SRC := kernel_main.c uart.c led.c interrupt.c timer.c mmu.c
 OBJ   := $(BUILD)/boot.o $(patsubst %.c,$(BUILD)/%.o,$(C_SRC))
 ELF   := $(BUILD)/kernel.elf
 IMG   := $(BUILD)/kernel.img
